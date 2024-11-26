@@ -1,0 +1,43 @@
+Table product {
+  id serial [primary key]
+  name varchar
+  category varchar
+  parameters jsonb
+}
+
+Table timestamps {
+  id serial [primary key]
+  timestamp timestamp [not null]
+  time_series_id integer
+  price float
+  amount integer
+}
+
+Table attributes {
+    id serial [primary key]
+    name text 
+    data_type text [not null]
+}
+
+Table time_series {
+  id serial [primary key]
+  name text
+  product_id integer
+}
+
+Table timestamp_attributes {
+  timestamp_id integer [primary key]
+  attribute_id integer
+  value text
+  indexes {
+        (attribute_id) [unique] 
+    }
+}
+
+Ref: product.id < time_series.product_id
+
+Ref: time_series.id < timestamps.time_series_id
+
+Ref: attributes.id < timestamp_attributes.attribute_id
+
+Ref: timestamps.id < timestamp_attributes.timestamp_id
