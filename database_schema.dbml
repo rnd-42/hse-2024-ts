@@ -1,43 +1,36 @@
-Table product {
-  id serial [primary key]
+Table products {
+  product_id serial [primary key]
   name varchar
   category varchar
   parameters jsonb
 }
 
 Table timestamps {
-  id serial [primary key]
-  timestamp timestamp [not null]
-  time_series_id integer
-  price float
-  amount integer
+  timestamp_id serial [primary key]
+  time_series_id integer [not null]
+  attribute_id integer [not null]
+  value text
+  start_dt timestamp [not null]
+  end_dt timestamp 
 }
 
 Table attributes {
-    id serial [primary key]
-    name text 
-    data_type text [not null]
+  attribute_id serial [primary key]
+  name text 
+  data_type text [not null]
 }
 
 Table time_series {
-  id serial [primary key]
+  time_series_id serial [primary key]
+  parent_time_series_id integer
   name text
-  product_id integer
+  product_id integer [not null]
 }
 
-Table timestamp_attributes {
-  timestamp_id integer [primary key]
-  attribute_id integer
-  value text
-  indexes {
-        (attribute_id) [unique] 
-    }
-}
+Ref: products.product_id < time_series.product_id
 
-Ref: product.id < time_series.product_id
+Ref: time_series.time_series_id < timestamps.time_series_id
 
-Ref: time_series.id < timestamps.time_series_id
+Ref: attributes.attribute_id < timestamps.attribute_id
 
-Ref: attributes.id < timestamp_attributes.attribute_id
-
-Ref: timestamps.id < timestamp_attributes.timestamp_id
+Ref: time_series.time_series_id < time_series.parent_time_series_id
