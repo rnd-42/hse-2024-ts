@@ -1,1 +1,10 @@
-user_requests.sql
+used_requests.sql
+venv/
+__pycache__/
+db.sqlite3
+.env
+.env.*
+!.env.example
+*.pyc
+*.pyo
+.DS_Store

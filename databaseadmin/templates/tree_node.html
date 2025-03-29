@@ -1,0 +1,41 @@
+{% comment %}
+Это рекурсивный шаблон для отображения узла дерева и всех его потомков.
+Параметры:
+- node: узел временного ряда
+- depth: текущая глубина в дереве (для отступов)
+{% endcomment %}
+
+<div class="tree-node">
+  <div class="node-content">
+    {% if node.children %}
+      <span id="toggle-{{ node.id }}" class="toggle-btn" onclick="toggleNode('{{ node.id }}')">{{ node.total_descendants }}</span>
+    {% else %}
+      <span class="toggle-btn" style="visibility: hidden">•</span>
+    {% endif %}
+    
+    <div class="node-info">
+      <div><strong>ID:</strong> {{ node.id }}</div>
+      <div><strong>Название:</strong> {{ node.name }}</div>
+      <div><strong>Продукт:</strong> {{ node.product }}</div>
+      
+      <div class="node-actions mt-2">
+        <a href="{% url 'timestamp_view' %}?filter_field=time_series_id&filter_operator=exact&filter_value={{ node.id }}" 
+           class="btn btn-sm btn-outline-primary" title="Показать таймстемпы этого ряда">
+          <i class="fas fa-clock"></i> Таймстемпы
+        </a>
+        <a href="{% url 'time_series_hierarchy' %}?series_id={{ node.id }}" 
+           class="btn btn-sm btn-outline-secondary" title="Иерархический просмотр таймстемпов">
+          <i class="fas fa-sitemap"></i> Иерархические таймстемпы
+        </a>
+      </div>
+    </div>
+  </div>
+  
+  {% if node.children %}
+    <div id="children-{{ node.id }}" class="node-children">
+      {% for child in node.children %}
+        {% include "tree_node.html" with node=child depth=depth|add:1 %}
+      {% endfor %}
+    </div>
+  {% endif %}
+</div> 
