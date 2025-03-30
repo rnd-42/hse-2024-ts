@@ -1,152 +1,43 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
-from django.http import JsonResponse, StreamingHttpResponse, HttpResponseNotFound
+from django.http import JsonResponse, StreamingHttpResponse, HttpResponseNotFound, HttpResponse, HttpRequest
 from django.contrib.auth.decorators import login_required
 from ..models import TimeSeries, Product, Attribute, Timestamp
-import zipfile
-from .utils import Echo, export_to_csv
+from .utils import export_to_csv
 import io
 import csv
-from datetime import datetime
+from django.db import models
+from typing import List, Dict, Any, Optional, Type, TypeVar, Union
+from django.db.models import Model, QuerySet
 
-def home(request):
+T = TypeVar('T', bound=Model)
+
+
+def home(request: HttpRequest) -> HttpResponse:
     """
     Домашняя страница приложения.
     """
     return render(request, 'home.html')
 
 
-@login_required
-def export_all_database(request):
-    """
-    Экспортирует все таблицы базы данных в CSV-файлы и создает ZIP-архив
-    с использованием потоковой передачи для эффективной обработки.
-    """
-    models_to_export = [
-        ('products.csv', Product),
-        ('attributes.csv', Attribute),
-        ('timeseries.csv', TimeSeries),
-        ('timestamps.csv', Timestamp),
-    ]
-    
-    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-    filename = f"database_export_{timestamp}.zip"
-    
-    # Класс для создания потоковой передачи ZIP-файла
-    class ZipFileStreamer:
-        def __init__(self):
-            self.buffer = io.BytesIO()
-            self.zip_file = zipfile.ZipFile(self.buffer, 'w', zipfile.ZIP_DEFLATED)
-            self.position = 0
-            self.finished = False
-        
-        def write_model_to_zip(self, filename, model):
-            pseudo_buffer = Echo()
-            writer = csv.writer(pseudo_buffer)
-            
-            # Получаем имена полей
-            field_names = [field.name for field in model._meta.fields]
-            
-            # Создаем CSV итератор
-            def csv_row_generator():
-                # Заголовок CSV
-                yield writer.writerow(field_names)
-                
-                # Применяем префетч для оптимизации
-                queryset = model.objects.all()
-                if hasattr(queryset, 'select_related'):
-                    for field in model._meta.fields:
-                        if field.is_relation and field.many_to_one:
-                            queryset = queryset.select_related(field.name)
-                
-                # Итерация по частям
-                chunk_size = 1000
-                start_pk = 0
-                has_more = True
-                pk_field = model._meta.pk.name
-                
-                while has_more:
-                    # Запрашиваем данные с фильтрацией по первичному ключу для эффективности
-                    chunk = list(queryset.filter(**{f"{pk_field}__gt": start_pk}).order_by(pk_field)[:chunk_size])
-                    if not chunk:
-                        break
-                    
-                    # Обновляем начальное значение PK для следующего чанка
-                    start_pk = getattr(chunk[-1], pk_field)
-                    
-                    # Обработка текущего чанка
-                    for obj in chunk:
-                        row_data = []
-                        for field in field_names:
-                            value = getattr(obj, field)
-                            # Форматирование даты/времени для CSV
-                            if hasattr(value, 'strftime'):
-                                value = value.strftime('%Y-%m-%d %H:%M:%S')
-                            row_data.append(value)
-                        yield writer.writerow(row_data)
-                    
-                    # Если получили меньше записей, чем размер чанка, значит это последний чанк
-                    has_more = len(chunk) == chunk_size
-            
-            # Записываем CSV в архив
-            content = ''.join(csv_row_generator())
-            self.zip_file.writestr(filename, content.encode('utf-8'))
-        
-        def __iter__(self):
-            return self
-            
-        def __next__(self):
-            # Если закончили обработку всех моделей
-            if self.finished:
-                raise StopIteration
-            
-            # Добавляем каждую модель в архив
-            for filename, model in models_to_export:
-                try:
-                    self.write_model_to_zip(filename, model)
-                except Exception as e:
-                    # Логируем ошибку, но продолжаем с другими моделями
-                    print(f"Error exporting {filename}: {str(e)}")
-            
-            # Закрываем ZIP-файл
-            self.zip_file.close()
-            
-            # Получаем содержимое буфера
-            zip_data = self.buffer.getvalue()
-            
-            # Помечаем, что закончили
-            self.finished = True
-            
-            # Возвращаем данные
-            return zip_data
-    
-    # Создаем потоковый ответ
-    response = StreamingHttpResponse(
-        ZipFileStreamer(),
-        content_type='application/zip',
-    )
-    response['Content-Disposition'] = f'attachment; filename="{filename}"'
-    response['Cache-Control'] = 'no-cache'
-    response['X-Accel-Buffering'] = 'no'
-    
-    return response
-
-
-def timeseries_tree_json(request):
+def timeseries_tree_json(request: HttpRequest) -> JsonResponse:
     """
     Представление для получения данных о дереве временных рядов в формате JSON.
     Используется для построения динамического дерева на клиентской стороне.
     """
-    parent_id = request.GET.get('parent_id')
+    parent_id: Optional[Union[str, None]] = request.GET.get('parent_id')
 
     if parent_id in (None, '', 'null', 'None'):
-        children = TimeSeries.objects.filter(parent_time_series__isnull=True)
+        children: QuerySet[TimeSeries] = TimeSeries.objects.filter(
+            parent_time_series__isnull=True)
     else:
-        children = TimeSeries.objects.filter(parent_time_series_id=parent_id)
+        children: QuerySet[TimeSeries] = TimeSeries.objects.filter(
+            parent_time_series_id=parent_id)
 
-    data = []
+    data: List[Dict[str, Any]] = []
     for ts in children:
-        has_children = TimeSeries.objects.filter(parent_time_series=ts).exists()
+        has_children: bool = TimeSeries.objects.filter(
+            parent_time_series=ts).exists()
         data.append({
             "id": ts.time_series_id,
             "text": ts.name,
@@ -156,72 +47,93 @@ def timeseries_tree_json(request):
     return JsonResponse(data, safe=False)
 
 
-def delete_object(request, model_name, pk):
+@login_required
+def delete_object(request: HttpRequest, model_name: str, pk: int) -> HttpResponse:
     """
     Общая функция для удаления объекта любой модели.
     """
     if request.method == 'POST':
-        model_map = {
-            'product': Product,
-            'timeseries': TimeSeries,
+        # Соответствие между именами таблиц и классами моделей
+        model_map: Dict[str, Type[Model]] = {
+            'products': Product,
+            'time_series': TimeSeries,
+            'attributes': Attribute,
+            'timestamps': Timestamp
         }
-        model = model_map.get(model_name.lower())
+
+        # Соответствие между именами таблиц и URL для перенаправления
+        url_map: Dict[str, str] = {
+            'products': 'product_view',
+            'time_series': 'timeseries_view',
+            'attributes': 'attribute_view',
+            'timestamps': 'timestamp_view',
+        }
+
+        model: Optional[Type[Model]] = model_map.get(model_name.lower())
         if not model:
-            messages.error(request, "Неверная модель для удаления.")
+            messages.error(
+                request, f"Неверная модель для удаления: {model_name}")
             return redirect('home')
 
-        instance = get_object_or_404(model, pk=pk)
+        instance: Model = get_object_or_404(model, pk=pk)
         instance.delete()
-        messages.success(request, f"{model_name.capitalize()} успешно удалён(а).")
-        return redirect(f'/{model_name}/')  # или используй reverse()
+        messages.success(
+            request, f"{model_name.capitalize()} успешно удалён(а).")
+
+        # Перенаправление на соответствующую страницу
+        url_name: str = url_map.get(model_name.lower(), model_name)
+        return redirect(url_name)
     else:
         messages.error(request, "Удаление возможно только методом POST.")
         return redirect('home')
 
 
 @login_required
-def time_series_tree_view(request):
+def time_series_tree_view(request: HttpRequest) -> HttpResponse:
     """
     Представление для страницы с древовидной структурой временных рядов.
     """
     # Получаем корневые временные ряды
-    root_series = TimeSeries.objects.filter(parent_time_series__isnull=True)
+    root_series: QuerySet[TimeSeries] = TimeSeries.objects.filter(
+        parent_time_series__isnull=True)
 
     # Рекурсивная функция для получения иерархии
-    def get_children(parent_id):
-        children = TimeSeries.objects.filter(parent_time_series_id=parent_id)
-        data = []
+    def get_children(parent_id: int) -> List[Dict[str, Any]]:
+        children: QuerySet[TimeSeries] = TimeSeries.objects.filter(
+            parent_time_series_id=parent_id)
+        data: List[Dict[str, Any]] = []
         for child in children:
-            child_data = {
+            child_data: Dict[str, Any] = {
                 'id': child.time_series_id,
                 'name': child.name,
                 'product': child.product.name if child.product else 'Не указан',
             }
-            
+
             # Получаем детей текущего узла
-            child_children = get_children(child.time_series_id)
+            child_children: List[Dict[str, Any]
+                                 ] = get_children(child.time_series_id)
             child_data['children'] = child_children
-            
+
             # Считаем общее количество потомков (включая потомков потомков)
-            total_descendants = len(child_children)
+            total_descendants: int = len(child_children)
             for descendant in child_children:
                 total_descendants += descendant.get('total_descendants', 0)
             child_data['total_descendants'] = total_descendants
-            
+
             data.append(child_data)
         return data
 
     # Строим дерево с корневыми элементами
-    time_series = []
+    time_series: List[Dict[str, Any]] = []
     for root in root_series:
         # Получаем детей корневого элемента
-        children = get_children(root.time_series_id)
-        
+        children: List[Dict[str, Any]] = get_children(root.time_series_id)
+
         # Считаем общее количество потомков
-        total_descendants = len(children)
+        total_descendants: int = len(children)
         for child in children:
             total_descendants += child.get('total_descendants', 0)
-        
+
         time_series.append({
             'id': root.time_series_id,
             'name': root.name,
@@ -234,7 +146,7 @@ def time_series_tree_view(request):
 
 
 @login_required
-def export_single_table(request, model_name):
+def export_single_table(request: HttpRequest, model_name: str) -> StreamingHttpResponse | HttpResponseNotFound:
     """
     Экспортирует данные из отдельной таблицы в CSV-файл.
     
@@ -243,13 +155,13 @@ def export_single_table(request, model_name):
         model_name: Имя модели для экспорта
     """
     model_map = {
-        'Product': Product,
-        'Attribute': Attribute,
-        'TimeSeries': TimeSeries,
-        'Timestamp': Timestamp,
+        'products': Product,
+        'attributes': Attribute,
+        'time_series': TimeSeries,
+        'timestamps': Timestamp,
     }
     
-    model = model_map.get(model_name)
+    model = model_map.get(model_name.lower())
     if not model:
         return HttpResponseNotFound("Указанная модель не найдена")
     
@@ -257,4 +169,82 @@ def export_single_table(request, model_name):
     queryset = model.objects.all()
     
     # Используем существующую функцию для экспорта в CSV
-    return export_to_csv(queryset, model=model) 
+    return export_to_csv(queryset, model=model)
+
+
+FIELD_EXAMPLES = {
+    models.CharField: "example_charfield",
+    models.TextField: "example_textfield",
+    models.IntegerField: "123",
+    models.FloatField: "123.45",
+    models.DecimalField: "123.45",
+    models.BooleanField: "true",
+    models.DateField: "2024-01-01",
+    models.DateTimeField: "2024-01-01 12:00:00",
+    models.TimeField: "12:00:00",
+    models.EmailField: "example@example.com",
+    models.URLField: "https://example.com",
+    models.JSONField: '{"key": "value"}',
+    models.ForeignKey: "1",
+}
+
+
+@login_required
+def download_csv_template(request: HttpRequest, model_name: str) -> HttpResponse:
+    """
+    Скачивание шаблона CSV для указанной модели.
+    """
+    model_map = {
+        'products': Product,
+        'time_series': TimeSeries,
+        'attributes': Attribute,
+        'timestamps': Timestamp
+    }
+
+    model = model_map.get(model_name.lower())
+    if not model:
+        return HttpResponseNotFound("Модель не найдена")
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    fields = []
+    for field in model._meta.fields:
+        if isinstance(field, models.AutoField) or (hasattr(field, 'auto_created') and field.auto_created):
+            continue
+
+        field_info = {
+            'name': field.name,
+            'verbose_name': field.verbose_name,
+            'help_text': field.help_text,
+            'is_required': not field.blank,
+            'field': field
+        }
+        fields.append(field_info)
+
+    writer.writerow([field['name'] for field in fields])
+
+    example_row = []
+    for field_info in fields:
+        field = field_info['field']
+
+        example_value = None
+        for field_class, example in FIELD_EXAMPLES.items():
+            if isinstance(field, field_class):
+                example_value = example
+                break
+
+        if example_value is None:
+            example_value = "example_value"
+
+        example_row.append(example_value)
+
+    writer.writerow(example_row)
+
+    content = output.getvalue()
+    output.close()
+
+    response = HttpResponse(content, content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="{model_name}_template.csv"'
+
+    return response

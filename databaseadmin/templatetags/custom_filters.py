@@ -53,3 +53,32 @@ def as_badge(value, color="secondary"):
     Обертывает значение в badge с указанным цветом
     """
     return mark_safe(f'<span class="badge bg-{color}">{value}</span>') 
+
+@register.filter
+def multiply(value, arg):
+    """
+    Умножает значение на аргумент
+    """
+    try:
+        return float(value) * float(arg)
+    except (ValueError, TypeError):
+        return 0
+    
+@register.filter
+def divisibleby(value, arg):
+    """
+    Делит значение на аргумент
+    """
+    try:
+        return float(value) / float(arg)
+    except (ValueError, TypeError, ZeroDivisionError):
+        return 0 
+
+@register.filter
+def endswith(value, suffix):
+    """
+    Проверяет, заканчивается ли строка определенным суффиксом
+    """
+    if not value:
+        return False
+    return str(value).endswith(suffix) 

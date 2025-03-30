@@ -4,10 +4,11 @@
 """
 from .base_views import (
     home,
-    delete_object,
     timeseries_tree_json,
     time_series_tree_view,
-    export_all_database
+    delete_object,
+    export_single_table,
+    download_csv_template,
 )
 
 from .data_views import (
@@ -26,26 +27,23 @@ from .utils import (
     apply_sorting,
     export_to_csv,
     get_field_types,
-    handle_csv_upload,
-    Echo
 )
 
 # Экспортируем все представления для использования в URLs
 __all__ = [
     'home',
-    'delete_object',
-    'timeseries_tree_json',
-    'time_series_tree_view',
-    'export_all_database',
     'product_view',
     'attribute_view',
     'timeseries_view',
     'timestamp_view',
+    'timeseries_tree_json',
+    'time_series_tree_view',
     'TimeSeriesHierarchyView',
+    'delete_object',
+    'export_single_table',
+    'download_csv_template',
     'apply_filters',
     'apply_sorting',
     'export_to_csv',
     'get_field_types',
-    'handle_csv_upload',
-    'Echo'
 ] 

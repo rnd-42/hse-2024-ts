@@ -2,15 +2,9 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 
-# Загружаем переменные окружения из .env файла
 load_dotenv()
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY')
@@ -19,9 +13,6 @@ SECRET_KEY = os.environ.get('SECRET_KEY')
 DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
-
-
-# Application definition
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -63,10 +54,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "djangoproject.wsgi.application"
 
-
-# Database
-# https://docs.djangoproject.com/en/5.1/ref/settings/#databases
-
 DATABASES = {
     'default': {
         'ENGINE': os.environ.get('DB_ENGINE', 'django.db.backends.postgresql'),
@@ -80,10 +67,6 @@ DATABASES = {
         'PORT': os.environ.get('DB_PORT', '5432'),
     }
 }
-
-
-# Password validation
-# https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -109,6 +92,5 @@ STATIC_URL = "static/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Редиректы после входа/выхода
 LOGIN_REDIRECT_URL = os.environ.get('LOGIN_REDIRECT_URL', '/')
 LOGOUT_REDIRECT_URL = os.environ.get('LOGOUT_REDIRECT_URL', '/accounts/login/')

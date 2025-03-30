@@ -1,4 +1,6 @@
 from django import template
+from django.db import models
+from ..models import Product, Attribute, TimeSeries, Timestamp
 
 register = template.Library()
 
@@ -6,8 +8,15 @@ register = template.Library()
 def get_attr(obj, attr_name):
     """
     Получение атрибута объекта или значения из словаря.
-    Работает как с обычными объектами Django, так и со словарями.
+    Для foreign key полей возвращает имя с ID через метод display_name.
     """
     if isinstance(obj, dict):
         return obj.get(attr_name)
-    return getattr(obj, attr_name, None)
+    
+    value = getattr(obj, attr_name, None)
+    
+    # Если значение - это объект одной из наших моделей
+    if isinstance(value, (Product, Attribute, TimeSeries, Timestamp)):
+        return value.display_name()
+    
+    return value
