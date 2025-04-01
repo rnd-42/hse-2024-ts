@@ -42,7 +42,7 @@ class ElasticityTestCase(unittest.TestCase):
         mock_engine.connect.return_value.__enter__.return_value = mock_conn
 
         merge_and_store_elasticities(dummy_df, dummy_df, dummy_df,
-                                     dummy_df, dummy_df, dummy_df, dummy_df,
+                                     dummy_df, dummy_df, dummy_df,
                                      engine=mock_engine)
 
         self.assertTrue(mock_conn.execute.called)
