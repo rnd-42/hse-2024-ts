@@ -7,11 +7,12 @@ def get_engine():
     return create_engine("postgresql://hsedb4:gfkT78kjk@db.int.y.rnd-42.ru:6432/hsedb4")
 
 
-def merge_and_store_elasticities(regression_df_7, regression_df_14, regression_df_30, pointwise_df_7, pointwise_df_14, pointwise_df_30, engine=None):
+def merge_and_store_elasticities(regression_df_7, regression_df_14, regression_df_30, pointwise_df_7, pointwise_df_14,
+                                 pointwise_df_30, total, engine=None):
     if engine is None:
         engine = get_engine()
 
-    dfs = [regression_df_7, regression_df_14, regression_df_30, pointwise_df_7, pointwise_df_14, pointwise_df_30]
+    dfs = [regression_df_7, regression_df_14, regression_df_30, pointwise_df_7, pointwise_df_14, pointwise_df_30, total]
 
     merged_df = pd.concat(dfs, ignore_index=True)
 
@@ -36,32 +37,27 @@ def read_from_postgres(engine=None):
     if engine is None:
         engine = get_engine()
     query = """
-    select val as trips, att_val as attribute, t5.dt as date, t5.product_id, t6.attribute_id
+    select val as trips, att_val as attribute, t5.dt as date, t5.time_series_id, t6.attribute_id
     from (select sum(t1.value::float) as val,
-        start_dt as dt, t4.product_id, t1.attribute_id
+        start_dt as dt, t3.time_series_id, t1.attribute_id
     from ts_schema.timestamps t1
     join ts_schema.attributes t2 
     on t1.attribute_id = t2.attribute_id
     join ts_schema.time_series t3
     on t1.time_series_id = t3.time_series_id
-    join ts_schema.products t4
-    on t3.product_id = t4.product_id
     and t2.name = 'traffic'
-    group by dt, t4.product_id, t1.attribute_id) t5
+    group by dt, t4.time_series_id, t1.attribute_id) t5
     join (select avg(t1.value::float) as att_val,
-        start_dt as dt, t4.product_id, t1.attribute_id
+        start_dt as dt, t3.time_series_id, t1.attribute_id
     from ts_schema.timestamps t1
     join ts_schema.attributes t2 
     on t1.attribute_id = t2.attribute_id
     join ts_schema.time_series t3
     on t1.time_series_id = t3.time_series_id
-    join ts_schema.products t4
-    on t3.product_id = t4.product_id
     and t2.name not in ('traffic')
-    group by dt, t4.product_id, t1.attribute_id) t6
+    group by dt, t3.time_series_id, t1.attribute_id) t6
     on t5.dt = t6.dt
-    and t5.product_id = t6.product_id
-    order by date
+    and t5.time_series_id = t6.time_series_id
     """
     df = pd.read_sql(query, engine)
     print(f"Данные успешно загружены из таблицы")

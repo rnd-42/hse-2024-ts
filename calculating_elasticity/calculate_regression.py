@@ -3,14 +3,14 @@ import numpy as np
 import statsmodels.api as sm
 
 
-def compute_rolling_elasticity(df, window_size=30 * 24, step=24):
+def compute_rolling_elasticity(df, window_size=30, step=1):
     df = df.copy()
     df["log_trips"] = np.log(df["trips"].clip(lower=1))
     df["log_attribute"] = np.log(df["attribute"].clip(lower=0.01))
 
     rolling_results = []
 
-    for (product_id, attribute_id), group in df.groupby(["product_id", "attribute_id"]):
+    for (time_series_id, attribute_id), group in df.groupby(["time_series_id", "attribute_id"]):
         rolling_dates = []
         rolling_elasticities = []
 
@@ -28,15 +28,15 @@ def compute_rolling_elasticity(df, window_size=30 * 24, step=24):
             rolling_dates.append(subset["date"].iloc[-1])
 
         rolling_results.extend([
-            {"product_id": product_id,
+            {"time_series_id": time_series_id,
              "attribute_id": attribute_id,
-             "method": f"rolling_{window_size//24}d",
+             "method": f"rolling_{window_size}d",
              "date": date,
              "elasticity": elasticity}
             for date, elasticity in zip(rolling_dates, rolling_elasticities)
         ])
 
-    print(f"Подсчитана эластичность с помощью регрессии с {window_size//24} дневным окном")
+    print(f"Подсчитана эластичность с помощью регрессии с {window_size} дневным окном")
 
     return pd.DataFrame(rolling_results)
 
