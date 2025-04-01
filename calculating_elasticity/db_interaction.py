@@ -8,11 +8,11 @@ def get_engine():
 
 
 def merge_and_store_elasticities(regression_df_7, regression_df_14, regression_df_30, pointwise_df_7, pointwise_df_14,
-                                 pointwise_df_30, total, engine=None):
+                                 pointwise_df_30, engine=None):
     if engine is None:
         engine = get_engine()
 
-    dfs = [regression_df_7, regression_df_14, regression_df_30, pointwise_df_7, pointwise_df_14, pointwise_df_30, total]
+    dfs = [regression_df_7, regression_df_14, regression_df_30, pointwise_df_7, pointwise_df_14, pointwise_df_30]
 
     merged_df = pd.concat(dfs, ignore_index=True)
 
