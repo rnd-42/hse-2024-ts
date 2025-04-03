@@ -27,6 +27,34 @@
            class="btn btn-sm btn-outline-secondary" title="Иерархический просмотр таймстемпов">
           <i class="fas fa-sitemap"></i> Иерархические таймстемпы
         </a>
+        {% if node.attribute_count >= 2 %}
+          {% if node.has_forecasting_model %}
+          <a href="#" 
+             onclick="createForecastingModel({{ node.id }})"
+             class="btn btn-sm btn-warning" title="Обновить модель прогнозирования">
+            <i class="fas fa-edit"></i> Обновить модель прогнозирования
+          </a>
+          <a href="#" 
+             onclick="deleteForcastingModel({{ node.id }})"
+             class="btn btn-sm btn-danger" title="Удалить модель прогнозирования">
+            <i class="fas fa-trash"></i> Удалить модель
+          </a>
+          {% else %}
+          <a href="#" 
+             onclick="createForecastingModel({{ node.id }})"
+             class="btn btn-sm btn-forecast" title="Создать модель прогнозирования">
+            <i class="fas fa-chart-line"></i> Создать модель прогнозирования
+          </a>
+          {% endif %}
+        {% endif %}
+        
+        {% if node.parent_has_forecasting_model and not node.has_forecasting_model %}
+          <a href="#" 
+             onclick="forecastChildSeries({{ node.parent_forecasting_model_id }}, {{ node.id }})"
+             class="btn btn-sm btn-info" title="Прогнозировать на основе родительской модели">
+            <i class="fas fa-magic"></i> Прогнозировать
+          </a>
+        {% endif %}
       </div>
     </div>
   </div>

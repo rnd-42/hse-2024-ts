@@ -25,71 +25,109 @@
         </div>
     {% endif %}
 
+    {% if error %}
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            {{ error }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    {% endif %}
+
+    {% block additional_content %}{% endblock %}
+
     <!-- Фильтры и сортировка -->
     <div class="card mb-4">
         <div class="card-header">
-            <h5 class="mb-0">Фильтры и сортировка</h5>
+            <h5 class="mb-0">Фильтрация и сортировка</h5>
         </div>
         <div class="card-body">
-            <form method="get" class="row g-3">
-                <div class="col-md-4">
-                    <label for="filter_field" class="form-label">Поле для фильтрации</label>
-                    <select name="filter_field" id="filter_field" class="form-select">
-                        <option value="">Выберите поле...</option>
-                        {% for field in fields %}
-                            <option value="{{ field.name }}" {% if filter_field == field.name %}selected{% endif %}>
-                                {{ field.verbose_name }}
-                            </option>
-                        {% endfor %}
-                    </select>
+            <form method="get" class="row g-3" id="filterSortForm">
+                {% for hidden_field, hidden_value in hidden_fields.items %}
+                    <input type="hidden" name="{{ hidden_field }}" value="{{ hidden_value }}">
+                {% endfor %}
+                
+                <!-- Фильтры -->
+                <div class="col-12 mb-2">
+                    <h6>Фильтры</h6>
+                    <div id="filterContainer">
+                        <!-- Шаблон фильтра -->
+                        <div class="row mb-2 filter-row">
+                            <div class="col-md-3">
+                                <select class="form-select filter-field" name="filter_field[]">
+                                    <option value="">Выберите поле</option>
+                                    {% for field_name, field_label in fields %}
+                                        <option value="{{ field_name }}">
+                                            {{ field_label }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select filter-operator" name="filter_operator[]">
+                                    <option value="">Выберите оператор</option>
+                                    <option value="exact">Точно равно</option>
+                                    <option value="contains">Содержит</option>
+                                    <option value="gt">Больше</option>
+                                    <option value="lt">Меньше</option>
+                                    <option value="gte">Больше или равно</option>
+                                    <option value="lte">Меньше или равно</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <input type="text" class="form-control filter-value" name="filter_value[]" placeholder="Значение">
+                            </div>
+                            <div class="col-md-3">
+                                <button type="button" class="btn btn-sm btn-outline-danger remove-filter">Удалить</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <button type="button" class="btn btn-sm btn-outline-success" id="addFilterBtn">
+                            <i class="fas fa-plus"></i> Добавить фильтр
+                        </button>
+                    </div>
                 </div>
-                <div class="col-md-3">
-                    <label for="filter_operator" class="form-label">Оператор</label>
-                    <select name="filter_operator" id="filter_operator" class="form-select">
-                        <option value="exact" {% if filter_operator == 'exact' %}selected{% endif %}>Равно</option>
-                        <option value="contains" {% if filter_operator == 'contains' %}selected{% endif %}>Содержит</option>
-                        <option value="startswith" {% if filter_operator == 'startswith' %}selected{% endif %}>Начинается с</option>
-                        <option value="endswith" {% if filter_operator == 'endswith' %}selected{% endif %}>Заканчивается на</option>
-                    </select>
+                
+                <!-- Сортировки -->
+                <div class="col-12 mt-3 mb-2">
+                    <h6>Сортировки</h6>
+                    <div id="sortContainer">
+                        <!-- Шаблон сортировки -->
+                        <div class="row mb-2 sort-row">
+                            <div class="col-md-6">
+                                <select class="form-select sort-field" name="sort_by[]">
+                                    <option value="">Выберите поле</option>
+                                    {% for field_name, field_label in fields %}
+                                        <option value="{{ field_name }}">
+                                            {{ field_label }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select sort-order" name="order[]">
+                                    <option value="asc">По возрастанию</option>
+                                    <option value="desc">По убыванию</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <button type="button" class="btn btn-sm btn-outline-danger remove-sort">Удалить</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <button type="button" class="btn btn-sm btn-outline-success" id="addSortBtn">
+                            <i class="fas fa-plus"></i> Добавить сортировку
+                        </button>
+                    </div>
                 </div>
-                <div class="col-md-3">
-                    <label for="filter_value" class="form-label">Значение</label>
-                    <input type="text" name="filter_value" id="filter_value" class="form-control" value="{{ filter_value }}">
-                </div>
-                <div class="col-md-2 d-flex align-items-end">
-                    <button type="submit" class="btn btn-primary w-100">Применить</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Сортировка -->
-    <div class="card mb-4">
-        <div class="card-header">
-            <h5 class="mb-0">Сортировка</h5>
-        </div>
-        <div class="card-body">
-            <form method="get" class="row g-3">
-                <div class="col-md-5">
-                    <label for="sort_by" class="form-label">Поле для сортировки</label>
-                    <select name="sort_by" id="sort_by" class="form-select">
-                        <option value="">Выберите поле...</option>
-                        {% for field in fields %}
-                            <option value="{{ field.name }}" {% if sort_by == field.name %}selected{% endif %}>
-                                {{ field.verbose_name }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-5">
-                    <label for="order" class="form-label">Порядок</label>
-                    <select name="order" id="order" class="form-select">
-                        <option value="asc" {% if order == 'asc' %}selected{% endif %}>По возрастанию</option>
-                        <option value="desc" {% if order == 'desc' %}selected{% endif %}>По убыванию</option>
-                    </select>
-                </div>
-                <div class="col-md-2 d-flex align-items-end">
-                    <button type="submit" class="btn btn-primary w-100">Применить</button>
+                
+                <div class="col-12 d-flex justify-content-between align-items-center mt-3">
+                    <button type="submit" class="btn btn-primary" name="action" value="filter">Применить фильтры и сортировку</button>
+                    {% if show_export_button|default:True %}
+                        <a href="{{ request.path }}?{% for key, value in request.GET.items %}{% if key != 'export' %}{{ key }}={{ value|urlencode }}&{% endif %}{% endfor %}export=1" class="btn btn-outline-success">
+                            <i class="fas fa-file-csv"></i> Экспорт в CSV
+                        </a>
+                    {% endif %}
                 </div>
             </form>
         </div>
@@ -98,12 +136,7 @@
     <!-- Таблица данных -->
     <div class="card mb-4">
         <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">{{ table_name|title }}</h5>
-            <div>
-                <a href="?export=1" class="btn btn-sm btn-outline-success">
-                    <i class="fas fa-download"></i> Экспорт в CSV
-                </a>
-            </div>
+            <h5 class="mb-0">{{ title|default:table_name }}</h5>
         </div>
         <div class="card-body">
             <div class="table-responsive">
@@ -111,12 +144,9 @@
                     <thead>
                         <tr>
                             <th>#</th>
-                            <th>ID</th>
                             {% block table_header %}
-                                {% for field in fields %}
-                                    {% if not field.name|endswith:"_id" %}
-                                    <th>{{ field.verbose_name }}</th>
-                                    {% endif %}
+                                {% for field_name, field_label in fields %}
+                                    <th>{{ field_label }}</th>
                                 {% endfor %}
                             {% endblock %}
                             {% if show_actions|default:True %}
@@ -129,10 +159,11 @@
                             {% for item in object_list %}
                                 <tr>
                                     <td>{{ forloop.counter|add:page_obj.start_index|add:"-1" }}</td>
-                                    <td>{{ item.pk }}</td>
-                                    {% for field in fields %}
-                                        {% if not field.name|endswith:"_id" %}
-                                        <td>{{ item|get_attr:field.name }}</td>
+                                    {% for field_name, field_label in fields %}
+                                        {% if field_name|endswith:"_id" %}
+                                            <td>{{ item|get_related_id:field_name }}</td>
+                                        {% else %}
+                                            <td>{{ item|get_attr:field_name }}</td>
                                         {% endif %}
                                     {% endfor %}
                                     {% if show_actions|default:True %}
@@ -243,11 +274,12 @@
                 <div class="col-md-6">
                     <!-- Зона для drag-and-drop -->
                     <div id="dropZone" 
-                         class="border rounded p-4 text-center mb-3">
+                         class="border rounded p-4 text-center mb-3"
+                         data-required-fields="{{ required_fields|join:',' }}">
                         <i class="fas fa-file-csv fa-2x mb-2"></i>
                         <p class="mb-2">Перетащите CSV файл сюда или</p>
                         <label class="btn btn-outline-primary mb-0">
-                            <input type="file" id="csvFile" accept=".csv" style="display: none;">
+                            <input type="file" id="csvFile" name="file" accept=".csv" style="display: none;">
                             Выберите файл
                         </label>
                     </div>
@@ -322,6 +354,168 @@
         </div>
     </div>
 </div>
+
+{% if show_export_button|default:True %}
+<script>
+    // Загрузка списка уже существующих фильтров
+    document.addEventListener('DOMContentLoaded', function() {
+        // Получаем все параметры GET запроса
+        var urlParams = new URLSearchParams(window.location.search);
+        
+        // Проверяем, есть ли фильтры
+        var filterFields = urlParams.getAll('filter_field[]');
+        var filterOperators = urlParams.getAll('filter_operator[]');
+        var filterValues = urlParams.getAll('filter_value[]');
+        
+        // Проверяем есть ли сортировки
+        var sortFields = urlParams.getAll('sort_by[]');
+        var sortOrders = urlParams.getAll('order[]');
+        
+        // Удаляем первый пустой фильтр и сортировку (шаблоны)
+        document.querySelectorAll('.filter-row').forEach(function(row) {
+            row.remove();
+        });
+        
+        document.querySelectorAll('.sort-row').forEach(function(row) {
+            row.remove();
+        });
+        
+        // Если есть фильтры, загружаем их
+        if (filterFields.length > 0) {
+            for (var i = 0; i < filterFields.length; i++) {
+                addFilter(filterFields[i], filterOperators[i], filterValues[i]);
+            }
+        } else {
+            // Добавляем первый пустой фильтр
+            addFilter();
+        }
+        
+        // Если есть сортировки, загружаем их
+        if (sortFields.length > 0) {
+            for (var i = 0; i < sortFields.length; i++) {
+                addSort(sortFields[i], sortOrders[i]);
+            }
+        } else {
+            // Добавляем первую пустую сортировку
+            addSort();
+        }
+        
+        // Обработчик события добавления фильтра
+        document.getElementById('addFilterBtn').addEventListener('click', function() {
+            addFilter();
+        });
+        
+        // Обработчик события добавления сортировки
+        document.getElementById('addSortBtn').addEventListener('click', function() {
+            addSort();
+        });
+        
+        // Обработчик удаления фильтров и сортировок (делегирование)
+        document.addEventListener('click', function(event) {
+            if (event.target.classList.contains('remove-filter')) {
+                var filterRows = document.querySelectorAll('.filter-row');
+                if (filterRows.length > 1) {
+                    // Если это не последний фильтр, удаляем строку
+                    event.target.closest('.filter-row').remove();
+                } else {
+                    // Если это последний фильтр, очищаем его поля
+                    var row = event.target.closest('.filter-row');
+                    row.querySelector('.filter-field').value = '';
+                    row.querySelector('.filter-operator').value = '';
+                    row.querySelector('.filter-value').value = '';
+                }
+            }
+            
+            if (event.target.classList.contains('remove-sort')) {
+                var sortRows = document.querySelectorAll('.sort-row');
+                if (sortRows.length > 1) {
+                    // Если это не последняя сортировка, удаляем строку
+                    event.target.closest('.sort-row').remove();
+                } else {
+                    // Если это последняя сортировка, очищаем её поля
+                    var row = event.target.closest('.sort-row');
+                    row.querySelector('.sort-field').value = '';
+                    row.querySelector('.sort-order').value = 'asc';
+                }
+            }
+        });
+    });
+    
+    // Функция добавления фильтра
+    function addFilter(field = '', operator = '', value = '') {
+        var filterContainer = document.getElementById('filterContainer');
+        var template = `
+            <div class="row mb-2 filter-row">
+                <div class="col-md-3">
+                    <select class="form-select filter-field" name="filter_field[]">
+                        <option value="">Выберите поле</option>
+                        {% for field_name, field_label in fields %}
+                            <option value="{{ field_name }}" ${field === "{{ field_name }}" ? 'selected' : ''}>
+                                {{ field_label }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select class="form-select filter-operator" name="filter_operator[]">
+                        <option value="">Выберите оператор</option>
+                        <option value="exact" ${operator === 'exact' ? 'selected' : ''}>Точно равно</option>
+                        <option value="contains" ${operator === 'contains' ? 'selected' : ''}>Содержит</option>
+                        <option value="gt" ${operator === 'gt' ? 'selected' : ''}>Больше</option>
+                        <option value="lt" ${operator === 'lt' ? 'selected' : ''}>Меньше</option>
+                        <option value="gte" ${operator === 'gte' ? 'selected' : ''}>Больше или равно</option>
+                        <option value="lte" ${operator === 'lte' ? 'selected' : ''}>Меньше или равно</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <input type="text" class="form-control filter-value" name="filter_value[]" placeholder="Значение" value="${value}">
+                </div>
+                <div class="col-md-3">
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-filter">Удалить</button>
+                </div>
+            </div>
+        `;
+        
+        // Добавляем HTML элемент
+        var div = document.createElement('div');
+        div.innerHTML = template;
+        filterContainer.appendChild(div.firstElementChild);
+    }
+    
+    // Функция добавления сортировки
+    function addSort(field = '', order = 'asc') {
+        var sortContainer = document.getElementById('sortContainer');
+        var template = `
+            <div class="row mb-2 sort-row">
+                <div class="col-md-6">
+                    <select class="form-select sort-field" name="sort_by[]">
+                        <option value="">Выберите поле</option>
+                        {% for field_name, field_label in fields %}
+                            <option value="{{ field_name }}" ${field === "{{ field_name }}" ? 'selected' : ''}>
+                                {{ field_label }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <select class="form-select sort-order" name="order[]">
+                        <option value="asc" ${order === 'asc' ? 'selected' : ''}>По возрастанию</option>
+                        <option value="desc" ${order === 'desc' ? 'selected' : ''}>По убыванию</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-sort">Удалить</button>
+                </div>
+            </div>
+        `;
+        
+        // Добавляем HTML элемент
+        var div = document.createElement('div');
+        div.innerHTML = template;
+        sortContainer.appendChild(div.firstElementChild);
+    }
+</script>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}

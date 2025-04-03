@@ -26,7 +26,6 @@ def apply_filters(qs: QuerySet, model: Type[Model], request: HttpRequest) -> Que
     """
     fields: Dict[str, Type[models.Field]] = {
         field.name: type(field) for field in model._meta.fields}
-    # Поддержка как старых так и новых параметров
     filter_fields: List[str] = request.GET.getlist(
         'filter_field[]') or request.GET.getlist('filter_field')
     filter_operators: List[str] = request.GET.getlist(
@@ -36,19 +35,29 @@ def apply_filters(qs: QuerySet, model: Type[Model], request: HttpRequest) -> Que
     filters: Q = Q()
 
     for field, operator, value in zip(filter_fields, filter_operators, filter_values):
-        if field and field in fields and value:
-            field_type: Type[models.Field] = fields[field]
-            is_numeric: bool = field_type in [
-                IntegerField, FloatField, DecimalField]
+        if not field or not operator or not value:
+            continue
+            
+        db_field = field
+        if field.endswith('_id') and field[:-3] in fields:
+            db_field = field[:-3] + '_id'
+            field_type = fields[field[:-3]]
+            is_numeric = True  # ID всегда числовые
+        elif field in fields:
+            db_field = field
+            field_type = fields[field]
+            is_numeric = field_type in [IntegerField, FloatField, DecimalField]
+        else:
+            continue
 
-            if is_numeric and operator in ["gt", "gte", "lt", "lte"]:
-                try:
-                    value = float(value)
-                    filters &= Q(**{f"{field}__{operator}": value})
-                except ValueError:
-                    continue
-            else:
-                filters &= Q(**{f"{field}__{operator}": value})
+        if is_numeric and operator in ["gt", "gte", "lt", "lte", "exact"]:
+            try:
+                value = float(value)
+                filters &= Q(**{f"{db_field}__{operator}": value})
+            except ValueError:
+                continue
+        else:
+            filters &= Q(**{f"{db_field}__{operator}": value})
 
     return qs.filter(filters)
 
@@ -62,12 +71,11 @@ def apply_sorting(qs: QuerySet, request: HttpRequest, allowed_sort_fields: List[
         request: HTTP-запрос
         allowed_sort_fields: Список разрешенных полей для сортировки
         prefix: Префикс для полей сортировки
-        primary_key: Имя первичного ключа (по умолчанию 'id')
+        primary_key: Имя первичного ключа (должно быть указано для каждой модели)
     
     Returns:
         Кортеж (отсортированный QuerySet, поле сортировки, порядок сортировки)
     """
-    # Поддержка как старых так и новых параметров сортировки
     sort_fields_raw = request.GET.getlist(
         'sort_by[]') or [request.GET.get('sort_by', '')]
     sort_orders_raw = request.GET.getlist(
@@ -76,26 +84,28 @@ def apply_sorting(qs: QuerySet, request: HttpRequest, allowed_sort_fields: List[
     sort_fields: List[str] = [str(f) for f in sort_fields_raw if f]
     sort_orders: List[str] = [str(o) for o in sort_orders_raw if o]
 
-    # Если нет полей сортировки, используем primary_key по умолчанию
     if not sort_fields or not sort_fields[0]:
-        sort_fields = [prefix + primary_key]
+        sort_fields = [primary_key]  # Используем переданный primary_key без префикса
         sort_orders = ['asc']
 
-    # Формируем список полей сортировки для order_by
     order_by_fields: List[str] = []
     for field, order in zip(sort_fields, sort_orders):
-        if field in allowed_sort_fields:
-            order_by_fields.append(("-" if order == "desc" else "") + field)
+        db_field = field
+        if field.endswith('_id') and field[:-3] in allowed_sort_fields:
+            db_field = field
+        elif field in allowed_sort_fields:
+            db_field = field
+        else:
+            continue
+            
+        order_by_fields.append(("-" if order == "desc" else "") + db_field)
 
-    # Если нет валидных полей, используем primary_key
     if not order_by_fields:
         order_by_fields = [primary_key]
 
-    # Применяем сортировку
     qs = qs.order_by(*order_by_fields)
 
-    # Возвращаем первое поле сортировки и порядок для обратной совместимости
-    primary_sort: str = sort_fields[0] if sort_fields else prefix + primary_key
+    primary_sort: str = sort_fields[0] if sort_fields else primary_key
     primary_order: str = sort_orders[0] if sort_orders else 'asc'
 
     return qs, primary_sort, primary_order
@@ -123,10 +133,8 @@ def export_to_csv(queryset: Optional[QuerySet], model: Optional[Type[Model]] = N
 
     model_name = model._meta.model_name
 
-    # Подготовка данных о полях
     fields: List[Dict[str, str]] = []
     for field in model._meta.fields:
-        # Для ForeignKey используем field_id
         if field.get_internal_type() == 'ForeignKey':
             field_export_name = f"{field.name}_id"
         else:
@@ -137,13 +145,11 @@ def export_to_csv(queryset: Optional[QuerySet], model: Optional[Type[Model]] = N
             'export_name': field_export_name
         })
 
-    # Получаем имена полей для экспорта
     header_names: List[str] = [field['export_name'] for field in fields]
 
     timestamp: str = datetime.now().strftime('%Y%m%d%H%M%S')
     filename: str = f"{model_name}_export_{timestamp}.csv"
 
-    # Используем Echo для создания псевдо-буфера для записи в ответ
     class BOMEcho:
         """
         Класс, который имитирует файлоподобный объект, который пишет в дополнительный объект.
@@ -162,31 +168,24 @@ def export_to_csv(queryset: Optional[QuerySet], model: Optional[Type[Model]] = N
     pseudo_buffer: BOMEcho = BOMEcho()
     writer = csv.writer(pseudo_buffer)
 
-    # Функция для преобразования данных в строки CSV
     def get_csv_data() -> Generator[bytes, None, None]:
-        # Заголовок - используем имена полей для экспорта
         yield writer.writerow(header_names).encode('utf-8')
 
-        # Получаем имя поля для фильтрации (обычно это primary key)
-        pk_field: str = model._meta.pk.name if model._meta.pk else 'id'  # Используем правильное имя первичного ключа модели
-
-        # Инициализируем queryset, если не передан
+        pk_field: str = model._meta.pk.name if model._meta.pk is not None else 'id'
+        
         nonlocal queryset
         if queryset is None:
             queryset = model.objects.all()
 
-        # Оптимизируем запросы для связанных полей
         for field in model._meta.fields:
             if field.is_relation and field.many_to_one and hasattr(queryset, 'select_related'):
                 queryset = queryset.select_related(field.name)
 
-        # Обрабатываем данные частями для экономии памяти
         chunk_size: int = 1000
         last_pk: int = 0
         has_more: bool = True
 
         while has_more:
-            # Фильтруем по первичному ключу для эффективности
             chunk: List[Model] = list(queryset.filter(
                 **{f"{pk_field}__gt": last_pk}).order_by(pk_field)[:chunk_size])
 
@@ -201,7 +200,6 @@ def export_to_csv(queryset: Optional[QuerySet], model: Optional[Type[Model]] = N
                     field_name: str = field_info['name']
                     value: Any = getattr(obj, field_name)
 
-                    # Для ForeignKey полей извлекаем ID
                     if isinstance(value, models.Model):
                         value = value.pk
 
@@ -227,15 +225,79 @@ def get_field_names_with_underscores(model):
     """
     result = []
     for field in model._meta.fields:
-        # Используем оригинальное имя поля вместо verbose_name
         display_name = field.name
-        # Если есть verbose_name, используем его, но сохраняем подчеркивания
         if hasattr(field, 'verbose_name') and field.verbose_name != field.name:
             display_name = str(field.verbose_name)
 
-        # Делаем первую букву заглавной
         display_name = display_name[0].upper() + display_name[1:]
 
         result.append((field.name, display_name))
 
+    return result
+
+def get_field_info(model: Type[Model]) -> List[Dict[str, Any]]:
+    """
+    Получает информацию о полях модели.
+    """
+    field_info = []
+    for field in model._meta.fields:
+        if field.auto_created:
+            continue
+
+        field_info.append({
+            'name': field.name,
+            'verbose_name': field.verbose_name,
+            'help_text': field.help_text,
+            'required': not field.null and not field.blank
+        })
+    return field_info
+
+def convert_fields_to_tuple(fields_info: List[Dict[str, str]]) -> List[Tuple[str, str]]:
+    """
+    Преобразует список словарей с информацией о полях 
+    в список кортежей (имя_поля, отображаемое_имя).
+    
+    Args:
+        fields_info: Список словарей с информацией о полях
+            [{'name': 'field_name', 'verbose_name': 'Field Name', ...}, ...]
+    
+    Returns:
+        Список кортежей [(name, display_name), ...]
+    """
+    result = []
+    for field in fields_info:
+        name = field.get('name', '')
+        verbose_name = field.get('verbose_name', name)
+        result.append((name, verbose_name))
+    
+    return result
+
+def split_foreign_keys_to_fields(model: Type[Model]) -> List[Tuple[str, str]]:
+    """
+    Создает список кортежей (имя_поля, отображаемое_имя) для модели,
+    разделяя поля ForeignKey на два отдельных поля: 
+    одно для ID (field_id), другое для связанного объекта (field).
+    
+    Args:
+        model: Django модель
+    
+    Returns:
+        Список кортежей [(name, display_name), ...]
+    """
+    result = []
+    
+    for field in model._meta.fields:
+        if field.auto_created:
+            continue
+        
+        field_name = field.name
+        
+        if field.get_internal_type() == 'ForeignKey':
+            id_field_name = f"{field_name}_id"
+            result.append((id_field_name, id_field_name))
+            
+            result.append((field_name, field_name))
+        else:
+            result.append((field_name, field_name))
+    
     return result

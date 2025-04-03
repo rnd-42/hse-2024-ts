@@ -14,6 +14,9 @@ Table timestamps {
   end_dt timestamp 
 }
 
+Ref: timestamps.time_series_id > time_series.time_series_id 
+Ref: timestamps.attribute_id > attributes.attribute_id 
+
 Table attributes {
   attribute_id serial [primary key]
   name text 
@@ -27,10 +30,17 @@ Table time_series {
   product_id integer [not null]
 }
 
-Ref: products.product_id < time_series.product_id
+Ref: time_series.product_id > products.product_id 
+Ref: time_series.parent_time_series_id > time_series.time_series_id 
 
-Ref: time_series.time_series_id < timestamps.time_series_id
+Table forecasting_models {
+  model_id serial [primary key]
+  time_series_id integer [not null]
+  feature_attribute_id integer [not null]
+  target_attribute_id integer [not null]
+  model_file_path varchar(255) [null] 
+}
 
-Ref: attributes.attribute_id < timestamps.attribute_id
-
-Ref: time_series.time_series_id < time_series.parent_time_series_id
+Ref: forecasting_models.time_series_id > time_series.time_series_id
+Ref: forecasting_models.feature_attribute_id > attributes.attribute_id
+Ref: forecasting_models.target_attribute_id > attributes.attribute_id

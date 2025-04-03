@@ -15,7 +15,6 @@ def get_attr(obj, attr_name):
     
     value = getattr(obj, attr_name, None)
     
-    # Если значение - это объект одной из наших моделей
     if isinstance(value, (Product, Attribute, TimeSeries, Timestamp)):
         return value.display_name()
     

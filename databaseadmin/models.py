@@ -3,7 +3,6 @@ from django.db import connection
 from typing import List, Optional, TypedDict, TypeVar, Type
 from datetime import datetime
 from django.db.models import QuerySet
-
 class HierarchyDict(TypedDict):
     id: int
     name: str
@@ -77,6 +76,28 @@ class TimeSeries(models.Model):
 
     def display_name(self) -> str:
         return f"{self.name} (ID: {self.time_series_id})"
+
+    def has_parent_forecasting_model(self) -> bool:
+        """Проверяет, существует ли модель прогнозирования для родительского ряда"""
+        if not self.parent_time_series:
+            return False
+        return ForecastingModel.objects.filter(time_series=self.parent_time_series).exists()
+        
+    def get_parent_forecasting_model(self) -> Optional['ForecastingModel']:
+        """Получает модель прогнозирования родительского ряда, если она существует"""
+        if not self.parent_time_series:
+            return None
+        try:
+            return ForecastingModel.objects.get(time_series=self.parent_time_series)
+        except ForecastingModel.DoesNotExist:
+            return None
+            
+    def get_timestamps_by_attribute(self, attribute_id: int) -> QuerySet['Timestamp']:
+        """Получает все таймстемпы данного ряда для указанного атрибута"""
+        return Timestamp.objects.filter(
+            time_series=self,
+            attribute_id=attribute_id
+        ).order_by('start_dt')
 
     @classmethod
     def get_available_series(cls: Type['TimeSeries']) -> QuerySet['TimeSeries']:
@@ -181,3 +202,52 @@ class Timestamp(models.Model):
 
     def display_name(self) -> str:
         return f"{self.time_series.name} - {self.attribute.name}: {self.value} (ID: {self.timestamp_id})"
+
+class ForecastingModel(models.Model):
+    model_id = models.AutoField(primary_key=True, verbose_name="model_id")
+    time_series = models.ForeignKey('TimeSeries', on_delete=models.CASCADE, verbose_name="time_series")
+    feature_attribute = models.ForeignKey('Attribute', on_delete=models.CASCADE, 
+                                         related_name='feature_models', verbose_name="feature_attribute")
+    target_attribute = models.ForeignKey('Attribute', on_delete=models.CASCADE, 
+                                        related_name='target_models', verbose_name="target_attribute")
+    model_file_path = models.CharField(max_length=255, null=True, blank=True, verbose_name="model_file_path")
+    
+    class Meta:
+        db_table = 'forecasting_models'
+        verbose_name = "Forecasting Model"
+        verbose_name_plural = "Forecasting Models"
+        managed = True
+    
+    def __str__(self) -> str:
+        return f"ForecastingModel {self.model_id} ({self.time_series.name})"
+    
+    def save_model_object(self, model_object):
+        """Сохраняет объект модели в файл вместо бинарного поля"""
+        import os
+        import pickle
+        
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        temp_dir = os.path.join(base_dir, 'models')
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        model_dir = os.path.join(temp_dir, f'model_dir_{self.model_id}')
+        os.makedirs(model_dir, exist_ok=True)
+        
+        file_path = os.path.join(model_dir, f'model_{self.model_id}.pkl')
+        
+        with open(file_path, 'wb') as f:
+            pickle.dump(model_object, f)
+        
+        self.model_file_path = file_path
+        self.save(update_fields=['model_file_path'])
+    
+    def load_model_object(self):
+        """Загружает объект модели из файла"""
+        import pickle
+        import os
+        
+        if self.model_file_path and os.path.exists(self.model_file_path):
+            with open(self.model_file_path, 'rb') as f:
+                return pickle.load(f)
+        
+        return None

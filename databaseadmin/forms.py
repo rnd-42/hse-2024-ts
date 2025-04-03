@@ -1,5 +1,4 @@
 from django import forms
-from django.forms.widgets import TextInput, DateTimeInput, Select
 from .models import Product, Attribute, TimeSeries, Timestamp
 
 class FormWithTypeLabels(forms.ModelForm):
@@ -8,7 +7,6 @@ class FormWithTypeLabels(forms.ModelForm):
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Добавляем тип поля к метке для каждого поля
         for field_name, field in self.fields.items():
             field_type = self._get_field_type(field)
             if field.label:
@@ -16,7 +14,6 @@ class FormWithTypeLabels(forms.ModelForm):
             else:
                 field.label = f"{field_name.replace('_', ' ').title()} [{field_type}]"
             
-            # Добавляем плейсхолдер, подсказывающий формат данных
             if hasattr(field.widget, 'attrs') and field_type:
                 field.widget.attrs.update({
                     'placeholder': self._get_placeholder(field_type, field),

@@ -2,12 +2,12 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
 from django.http import JsonResponse, StreamingHttpResponse, HttpResponseNotFound, HttpResponse, HttpRequest
 from django.contrib.auth.decorators import login_required
-from ..models import TimeSeries, Product, Attribute, Timestamp
+from ..models import TimeSeries, Product, Attribute, Timestamp, ForecastingModel
 from .utils import export_to_csv
 import io
 import csv
 from django.db import models
-from typing import List, Dict, Any, Optional, Type, TypeVar, Union
+from typing import List, Dict, Any, Optional, Type, TypeVar, Union, Set
 from django.db.models import Model, QuerySet
 
 T = TypeVar('T', bound=Model)
@@ -53,7 +53,6 @@ def delete_object(request: HttpRequest, model_name: str, pk: int) -> HttpRespons
     Общая функция для удаления объекта любой модели.
     """
     if request.method == 'POST':
-        # Соответствие между именами таблиц и классами моделей
         model_map: Dict[str, Type[Model]] = {
             'products': Product,
             'time_series': TimeSeries,
@@ -61,7 +60,6 @@ def delete_object(request: HttpRequest, model_name: str, pk: int) -> HttpRespons
             'timestamps': Timestamp
         }
 
-        # Соответствие между именами таблиц и URL для перенаправления
         url_map: Dict[str, str] = {
             'products': 'product_view',
             'time_series': 'timeseries_view',
@@ -80,7 +78,6 @@ def delete_object(request: HttpRequest, model_name: str, pk: int) -> HttpRespons
         messages.success(
             request, f"{model_name.capitalize()} успешно удалён(а).")
 
-        # Перенаправление на соответствующую страницу
         url_name: str = url_map.get(model_name.lower(), model_name)
         return redirect(url_name)
     else:
@@ -91,30 +88,58 @@ def delete_object(request: HttpRequest, model_name: str, pk: int) -> HttpRespons
 @login_required
 def time_series_tree_view(request: HttpRequest) -> HttpResponse:
     """
-    Представление для страницы с древовидной структурой временных рядов.
+    Отображает страницу с древовидным представлением временных рядов.
     """
-    # Получаем корневые временные ряды
     root_series: QuerySet[TimeSeries] = TimeSeries.objects.filter(
-        parent_time_series__isnull=True)
+        parent_time_series__isnull=True).order_by('time_series_id')
+    
+    # Собираем информацию о моделях прогнозирования
+    forecasting_models = ForecastingModel.objects.all()
+    forecasting_model_ids = {model.time_series.time_series_id: model.model_id for model in forecasting_models}
+    
+    # Словарь для хранения количества атрибутов для каждого временного ряда
+    timestamp_counts: Dict[int, int] = {}
+    
+    # Собираем информацию о доступных атрибутах для каждого временного ряда
+    all_time_series_attributes: Dict[int, Set[int]] = {}
+    
+    all_timestamps = Timestamp.objects.values('time_series_id', 'attribute_id').distinct()
+    for item in all_timestamps:
+        ts_id = item['time_series_id']
+        if ts_id not in all_time_series_attributes:
+            all_time_series_attributes[ts_id] = set()
+        all_time_series_attributes[ts_id].add(item['attribute_id'])
+        
+    for ts_id, attrs in all_time_series_attributes.items():
+        timestamp_counts[ts_id] = len(attrs)
 
-    # Рекурсивная функция для получения иерархии
     def get_children(parent_id: int) -> List[Dict[str, Any]]:
         children: QuerySet[TimeSeries] = TimeSeries.objects.filter(
             parent_time_series_id=parent_id)
         data: List[Dict[str, Any]] = []
         for child in children:
+            attribute_count = timestamp_counts.get(child.time_series_id, 0)
+            
+            has_forecasting_model = child.time_series_id in forecasting_model_ids
+            
+            # Проверяем, есть ли у родителя модель прогнозирования
+            parent_has_forecasting_model = parent_id in forecasting_model_ids
+            parent_forecasting_model_id = forecasting_model_ids.get(parent_id, None)
+            
             child_data: Dict[str, Any] = {
                 'id': child.time_series_id,
                 'name': child.name,
                 'product': child.product.name if child.product else 'Не указан',
+                'attribute_count': attribute_count,
+                'has_forecasting_model': has_forecasting_model,
+                'parent_has_forecasting_model': parent_has_forecasting_model,
+                'parent_forecasting_model_id': parent_forecasting_model_id,
             }
 
-            # Получаем детей текущего узла
             child_children: List[Dict[str, Any]
                                  ] = get_children(child.time_series_id)
             child_data['children'] = child_children
 
-            # Считаем общее количество потомков (включая потомков потомков)
             total_descendants: int = len(child_children)
             for descendant in child_children:
                 total_descendants += descendant.get('total_descendants', 0)
@@ -123,13 +148,14 @@ def time_series_tree_view(request: HttpRequest) -> HttpResponse:
             data.append(child_data)
         return data
 
-    # Строим дерево с корневыми элементами
     time_series: List[Dict[str, Any]] = []
     for root in root_series:
-        # Получаем детей корневого элемента
+        attribute_count = timestamp_counts.get(root.time_series_id, 0)
+        
+        has_forecasting_model = root.time_series_id in forecasting_model_ids
+        
         children: List[Dict[str, Any]] = get_children(root.time_series_id)
 
-        # Считаем общее количество потомков
         total_descendants: int = len(children)
         for child in children:
             total_descendants += child.get('total_descendants', 0)
@@ -139,7 +165,11 @@ def time_series_tree_view(request: HttpRequest) -> HttpResponse:
             'name': root.name,
             'product': root.product.name if root.product else 'Не указан',
             'children': children,
-            'total_descendants': total_descendants
+            'total_descendants': total_descendants,
+            'attribute_count': attribute_count,
+            'has_forecasting_model': has_forecasting_model,
+            'parent_has_forecasting_model': False,  # У корневых узлов нет родителей
+            'parent_forecasting_model_id': None,
         })
 
     return render(request, 'time_series_tree.html', {'time_series': time_series})
@@ -165,10 +195,8 @@ def export_single_table(request: HttpRequest, model_name: str) -> StreamingHttpR
     if not model:
         return HttpResponseNotFound("Указанная модель не найдена")
     
-    # Получаем все записи модели
     queryset = model.objects.all()
     
-    # Используем существующую функцию для экспорта в CSV
     return export_to_csv(queryset, model=model)
 
 

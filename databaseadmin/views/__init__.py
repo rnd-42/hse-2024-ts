@@ -29,7 +29,11 @@ from .utils import (
     get_field_types,
 )
 
-# Экспортируем все представления для использования в URLs
+from .api_views import (
+    get_time_series_attributes,
+    create_forecasting_model,
+)
+
 __all__ = [
     'home',
     'product_view',
@@ -46,4 +50,6 @@ __all__ = [
     'apply_sorting',
     'export_to_csv',
     'get_field_types',
+    'get_time_series_attributes',
+    'create_forecasting_model',
 ] 

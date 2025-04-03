@@ -5,31 +5,36 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentUpload = null;
 
     // Получаем обязательные поля из data-атрибута
-    const requiredFields = dropZone.dataset.requiredFields.split(',').filter(Boolean);
+    const requiredFields = dropZone && dropZone.dataset.requiredFields ? 
+        dropZone.dataset.requiredFields.split(',').filter(Boolean) : [];
 
     // Обработчики для drag-and-drop
-    dropZone.addEventListener('dragover', function(e) {
-        e.preventDefault();
-        dropZone.classList.add('border-primary');
-    });
+    if (dropZone) {
+        dropZone.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            dropZone.classList.add('border-primary');
+        });
 
-    dropZone.addEventListener('dragleave', function() {
-        dropZone.classList.remove('border-primary');
-    });
+        dropZone.addEventListener('dragleave', function() {
+            dropZone.classList.remove('border-primary');
+        });
 
-    dropZone.addEventListener('drop', function(e) {
-        e.preventDefault();
-        dropZone.classList.remove('border-primary');
-        const file = e.dataTransfer.files[0];
-        handleFile(file);
-    });
+        dropZone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            dropZone.classList.remove('border-primary');
+            const file = e.dataTransfer.files[0];
+            handleFile(file);
+        });
+    }
 
     // Обработчик для выбора файла через кнопку
-    fileInput.addEventListener('change', function() {
-        if (this.files.length > 0) {
-            handleFile(this.files[0]);
-        }
-    });
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            if (this.files.length > 0) {
+                handleFile(this.files[0]);
+            }
+        });
+    }
 
     function handleFile(file) {
         // Проверяем тип файла
@@ -116,6 +121,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function uploadFile(file) {
+        // Сбрасываем предыдущие результаты перед новой загрузкой
+        document.getElementById('importResults').style.display = 'none';
+        document.getElementById('importErrors').style.display = 'none';
+
         const formData = new FormData();
         formData.append('file', file);
         formData.append('csrfmiddlewaretoken', getCookie('csrftoken'));
@@ -126,7 +135,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Настраиваем отображение прогресса
         const progressBar = document.getElementById('progressBar');
         const progressPercent = document.getElementById('progressPercent');
-        document.getElementById('uploadProgress').style.display = 'block';
+        const uploadProgress = document.getElementById('uploadProgress'); 
+        uploadProgress.style.display = 'block';
 
         xhr.upload.onprogress = function(e) {
             if (e.lengthComputable) {
@@ -137,16 +147,32 @@ document.addEventListener('DOMContentLoaded', function() {
         };
 
         xhr.onload = function() {
-            if (xhr.status === 200) {
+            // Скрываем прогресс загрузки после получения ответа
+            uploadProgress.style.display = 'none';
+            
+            try {
                 const response = JSON.parse(xhr.responseText);
-                showResults(response);
-            } else {
-                showError('Ошибка при загрузке файла');
+                
+                if (xhr.status === 200) {
+                    showResults(response);
+                } else {
+                    showError(response.error || `Ошибка сервера: ${xhr.status}`);
+                    console.error('Server error:', response);
+                }
+            } catch (e) {
+                showError(`Ошибка при обработке ответа: ${e.message}`);
+                console.error('Error parsing response:', xhr.responseText, e);
             }
         };
 
         xhr.onerror = function() {
+            uploadProgress.style.display = 'none';
             showError('Ошибка сети при загрузке файла');
+        };
+
+        xhr.onabort = function() {
+            uploadProgress.style.display = 'none';
+            showError('Загрузка была прервана');
         };
 
         xhr.open('POST', window.location.pathname, true);
@@ -159,10 +185,14 @@ document.addEventListener('DOMContentLoaded', function() {
         cancelButton.onclick = function() {
             if (currentUpload) {
                 currentUpload.abort();
-                showError('Загрузка отменена');
             }
         };
-        document.getElementById('uploadProgress').appendChild(cancelButton);
+        
+        // Удаляем предыдущие кнопки отмены, если есть
+        const existingButtons = uploadProgress.querySelectorAll('button');
+        existingButtons.forEach(button => button.remove());
+        
+        uploadProgress.appendChild(cancelButton);
     }
 
     function showResults(response) {
@@ -170,9 +200,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const errors = document.getElementById('importErrors');
         
         // Показываем результаты
-        document.getElementById('processedRows').textContent = response.total_rows;
-        document.getElementById('successRows').textContent = response.success_count;
-        document.getElementById('errorRows').textContent = response.error_count;
+        document.getElementById('processedRows').textContent = response.processed || 0;
+        document.getElementById('successRows').textContent = response.success_count || 0;
+        document.getElementById('errorRows').textContent = response.error_count || 0;
         results.style.display = 'block';
 
         // Показываем ошибки, если есть
@@ -188,6 +218,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (response.success_count > 0) {
             // Здесь можно добавить код для обновления основной таблицы
             // или показать сообщение о необходимости обновить страницу
+            setTimeout(() => {
+                window.location.reload();
+            }, 3000);
         }
     }
 

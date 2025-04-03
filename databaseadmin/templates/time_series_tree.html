@@ -11,6 +11,99 @@
   </div>
 </div>
 
+<!-- Модальное окно для создания модели прогнозирования -->
+<div class="modal fade" id="forecastingModelModal" tabindex="-1" aria-labelledby="forecastingModelModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="forecastingModelModalLabel">Создание модели прогнозирования</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p id="modelDescription">Для временного ряда <strong id="timeSeriesName"></strong> будет создана модель прогнозирования.</p>
+        <form id="forecastingModelForm">
+          <input type="hidden" id="timeSeriesId" name="time_series_id">
+          <input type="hidden" id="isUpdateModel" name="is_update_model" value="false">
+          
+          <div class="mb-3">
+            <label for="featureAttribute" class="form-label">Выберите атрибут-признак (цена):</label>
+            <select class="form-select" id="featureAttribute" name="feature_attribute" required>
+              <option value="">Выберите атрибут...</option>
+              <!-- Опции будут добавлены динамически -->
+            </select>
+          </div>
+          
+          <div class="mb-3">
+            <label for="targetAttribute" class="form-label">Выберите целевой атрибут (объем продаж):</label>
+            <select class="form-select" id="targetAttribute" name="target_attribute" required>
+              <option value="">Выберите атрибут...</option>
+              <!-- Опции будут добавлены динамически -->
+            </select>
+          </div>
+        </form>
+        
+        <!-- Индикатор прогресса -->
+        <div id="modelProgressContainer" style="display: none;">
+          <div class="mt-4 mb-2">
+            <div class="d-flex justify-content-between">
+              <span id="modelProgressStatus">Создание модели...</span>
+              <span id="modelProgressPercent"></span>
+            </div>
+            <div class="progress mt-2">
+              <div id="modelProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                   role="progressbar" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button type="button" class="btn btn-success" id="createModelBtn">Создать модель</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Модальное окно для отображения результатов прогнозирования -->
+<div class="modal fade" id="forecastResultModal" tabindex="-1" aria-labelledby="forecastResultModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="forecastResultModalLabel">Результаты прогнозирования</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="forecastLoading" class="text-center">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Загрузка...</span>
+          </div>
+          <p class="mt-2">Выполняется прогнозирование...</p>
+        </div>
+        <div id="forecastSuccess" style="display: none;">
+          <div class="alert alert-success">
+            <h6 class="alert-heading">Прогноз успешно создан!</h6>
+            <p id="forecastSuccessMessage"></p>
+          </div>
+          <div class="text-center mt-3">
+            <a id="viewForecastResultsLink" href="#" class="btn btn-outline-primary">
+              <i class="fas fa-clock"></i> Просмотреть результаты прогноза
+            </a>
+          </div>
+        </div>
+        <div id="forecastError" style="display: none;">
+          <div class="alert alert-danger">
+            <h6 class="alert-heading">Произошла ошибка при прогнозировании</h6>
+            <p id="forecastErrorMessage"></p>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <style>
   .tree-container {
     margin-top: 20px;
@@ -114,6 +207,40 @@
     height: 1px;
     background-color: #aaa;
   }
+  
+  /* Стили для индикатора загрузки */
+  .spinner-border-sm {
+    width: 1rem;
+    height: 1rem;
+    border-width: 0.2em;
+    margin-right: 0.5rem;
+  }
+  
+  /* Стиль для кнопки создания модели прогнозирования */
+  .btn-forecast {
+    background-color: #28a745;
+    color: white;
+    transition: all 0.3s;
+  }
+  
+  .btn-forecast:hover {
+    background-color: #218838;
+    transform: translateY(-2px);
+  }
+  
+  /* Стиль для кнопки обновления модели прогнозирования */
+  .btn-warning {
+    background-color: #ffc107;
+    color: #212529;
+    border-color: #ffc107;
+    transition: all 0.3s;
+  }
+  
+  .btn-warning:hover {
+    background-color: #e0a800;
+    border-color: #d39e00;
+    transform: translateY(-2px);
+  }
 </style>
 
 <script>
@@ -132,6 +259,399 @@
       childrenElement.style.display = "none";
       toggleBtn.classList.remove("expanded");
     }
+  }
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Объект для хранения информации о временных рядах
+  const timeSeriesData = {};
+  
+  {% for series in time_series %}
+  timeSeriesData[{{ series.id }}] = {
+    name: "{{ series.name }}",
+    id: {{ series.id }},
+    hasModel: {% if series.has_forecasting_model %}true{% else %}false{% endif %}
+  };
+  {% endfor %}
+  
+  // Функция для инициации создания модели прогнозирования
+  function createForecastingModel(timeSeriesId) {
+    const isUpdate = timeSeriesData[timeSeriesId].hasModel;
+    
+    // Устанавливаем ID и название временного ряда в модальном окне
+    document.getElementById('timeSeriesId').value = timeSeriesId;
+    document.getElementById('timeSeriesName').textContent = timeSeriesData[timeSeriesId].name;
+    document.getElementById('isUpdateModel').value = isUpdate;
+    
+    // Обновляем текст модального окна в зависимости от наличия модели
+    if (isUpdate) {
+      document.getElementById('forecastingModelModalLabel').textContent = 'Обновление модели прогнозирования';
+      document.getElementById('modelDescription').innerHTML = `Для временного ряда <strong>${timeSeriesData[timeSeriesId].name}</strong> будет обновлена модель прогнозирования.`;
+      document.getElementById('createModelBtn').textContent = 'Обновить модель';
+      document.getElementById('createModelBtn').classList.remove('btn-success');
+      document.getElementById('createModelBtn').classList.add('btn-warning');
+    } else {
+      document.getElementById('forecastingModelModalLabel').textContent = 'Создание модели прогнозирования';
+      document.getElementById('modelDescription').innerHTML = `Для временного ряда <strong>${timeSeriesData[timeSeriesId].name}</strong> будет создана модель прогнозирования.`;
+      document.getElementById('createModelBtn').textContent = 'Создать модель';
+      document.getElementById('createModelBtn').classList.remove('btn-warning');
+      document.getElementById('createModelBtn').classList.add('btn-success');
+    }
+    
+    // Загружаем атрибуты для этого временного ряда
+    fetchAttributes(timeSeriesId);
+    
+    // Открываем модальное окно
+    const modal = new bootstrap.Modal(document.getElementById('forecastingModelModal'));
+    modal.show();
+    
+    return false; // Предотвращаем действие ссылки по умолчанию
+  }
+  
+  // Функция для загрузки атрибутов временного ряда
+  function fetchAttributes(timeSeriesId) {
+    fetch(`/api/timeseries/${timeSeriesId}/attributes/`)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('Ошибка загрузки атрибутов');
+        }
+        return response.json();
+      })
+      .then(data => {
+        // Заполняем выпадающие списки атрибутов
+        const featureSelect = document.getElementById('featureAttribute');
+        const targetSelect = document.getElementById('targetAttribute');
+        
+        // Очищаем текущие опции (кроме первой)
+        featureSelect.innerHTML = '<option value="">Выберите атрибут...</option>';
+        targetSelect.innerHTML = '<option value="">Выберите атрибут...</option>';
+        
+        // Добавляем новые опции для атрибутов
+        data.forEach(attr => {
+          const featureOption = document.createElement('option');
+          featureOption.value = attr.id;
+          featureOption.textContent = attr.name;
+          featureSelect.appendChild(featureOption);
+          
+          const targetOption = document.createElement('option');
+          targetOption.value = attr.id;
+          targetOption.textContent = attr.name;
+          targetSelect.appendChild(targetOption);
+        });
+      })
+      .catch(error => {
+        console.error('Ошибка:', error);
+        alert('Не удалось загрузить атрибуты временного ряда');
+      });
+  }
+  
+  // Обработчик кнопки "Создать модель"
+  document.getElementById('createModelBtn').addEventListener('click', function() {
+    const form = document.getElementById('forecastingModelForm');
+    const timeSeriesId = document.getElementById('timeSeriesId').value;
+    const featureAttribute = document.getElementById('featureAttribute').value;
+    const targetAttribute = document.getElementById('targetAttribute').value;
+    
+    // Проверка заполнения полей
+    if (!featureAttribute || !targetAttribute) {
+      alert('Пожалуйста, выберите оба атрибута');
+      return;
+    }
+    
+    if (featureAttribute === targetAttribute) {
+      alert('Атрибуты должны быть разными');
+      return;
+    }
+    
+    // Показываем индикатор загрузки
+    document.getElementById('createModelBtn').disabled = true;
+    document.getElementById('modelProgressContainer').style.display = 'block';
+    updateProgress('Создание модели...', 10);
+    
+    // Отправляем запрос на создание модели
+    fetch('/api/forecasting/create/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCookie('csrftoken')
+      },
+      body: JSON.stringify({
+        time_series_id: timeSeriesId,
+        feature_attribute_id: featureAttribute,
+        target_attribute_id: targetAttribute
+      })
+    })
+    .then(response => {
+      if (!response.ok) {
+        return response.json().then(data => {
+          throw new Error(data.error || `Ошибка сервера ${response.status}: ${response.statusText}`);
+        });
+      }
+      return response.json().catch(err => {
+        throw new Error(`Ошибка формата ответа при создании модели: ${err.message}`);
+      });
+    })
+    .then(data => {
+      // Если модель успешно создана, запускаем процесс обучения
+      if (data.status === 'success') {
+        const modelId = data.model_id;
+        updateProgress('Модель создана. Подготовка данных для обучения...', 30);
+        return trainModel(modelId);
+      } else {
+        throw new Error(data.error || 'Неизвестная ошибка при создании модели');
+      }
+    })
+    .then(trainResult => {
+      updateProgress('Обучение завершено', 100);
+      
+      // Закрываем модальное окно через небольшую задержку
+      setTimeout(() => {
+        const modal = bootstrap.Modal.getInstance(document.getElementById('forecastingModelModal'));
+        modal.hide();
+        
+        // Сбрасываем прогресс
+        document.getElementById('modelProgressContainer').style.display = 'none';
+        updateProgress('', 0);
+        
+        // Показываем результат обучения
+        if (trainResult.status === 'success') {
+          alert(`Модель успешно создана и обучена!\nMAPE: ${trainResult.mape}%\nТочек для обучения: ${trainResult.training_points}\nТочек для тестирования: ${trainResult.test_points}`);
+          
+          // Обновляем страницу для отображения модели
+          window.location.reload();
+        } else {
+          alert(`Модель создана, но не обучена: ${trainResult.error}`);
+        }
+      }, 500);
+    })
+    .catch(error => {
+      console.error('Ошибка:', error);
+      alert('Не удалось создать или обучить модель прогнозирования: ' + error.message);
+      
+      // Сбрасываем прогресс
+      document.getElementById('modelProgressContainer').style.display = 'none';
+      updateProgress('', 0);
+      
+      // Здесь не нужно явно удалять модель, так как это уже 
+      // выполняется в функции trainModel при ошибке обучения
+    })
+    .finally(() => {
+      // Восстанавливаем кнопку
+      document.getElementById('createModelBtn').disabled = false;
+    });
+  });
+  
+  // Функция для обновления прогресса
+  function updateProgress(status, percent) {
+    if (status) document.getElementById('modelProgressStatus').textContent = status;
+    document.getElementById('modelProgressBar').style.width = percent + '%';
+    document.getElementById('modelProgressPercent').textContent = percent + '%';
+  }
+  
+  // Функция для обучения модели
+  function trainModel(modelId) {
+    updateProgress('Обучение модели...', 50);
+    
+    return fetch('/api/forecasting/train/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCookie('csrftoken')
+      },
+      body: JSON.stringify({
+        model_id: modelId
+      })
+    })
+    .then(response => {
+      if (!response.ok) {
+        // Если при обучении возникла ошибка, удаляем модель и показываем ошибку
+        return response.json()
+          .then(data => {
+            const errorMessage = data.error || `Ошибка сервера ${response.status}: ${response.statusText}`;
+            deleteAndThrow(modelId, errorMessage);
+          })
+          .catch(jsonError => {
+            // Если не удалось разобрать JSON в ответе сервера
+            const errorMessage = `Ошибка сервера ${response.status}: ${response.statusText}`;
+            deleteAndThrow(modelId, errorMessage);
+          });
+      }
+      
+      updateProgress('Проверка результатов обучения...', 80);
+      
+      // Проверяем возможность получить JSON из ответа
+      return response.json()
+        .catch(jsonError => {
+          const errorMessage = `Ошибка формата ответа: ${jsonError.message}`;
+          deleteAndThrow(modelId, errorMessage);
+        });
+    });
+  }
+  
+  // Вспомогательная функция для удаления модели и генерации ошибки
+  function deleteAndThrow(modelId, errorMessage) {
+    // Удаляем неудачно обученную модель
+    deleteModel(modelId)
+      .then(() => {
+        console.log(`Модель ${modelId} удалена после неудачного обучения`);
+      })
+      .catch(deleteError => {
+        console.error('Ошибка при удалении модели:', deleteError);
+      });
+      
+    // Генерируем ошибку с переданным сообщением
+    throw new Error(errorMessage);
+  }
+  
+  // Функция для удаления модели по ID
+  function deleteModel(modelId) {
+    return fetch('/api/forecasting/delete/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCookie('csrftoken')
+      },
+      body: JSON.stringify({
+        model_id: modelId
+      })
+    })
+    .then(response => {
+      if (!response.ok) {
+        return response.json().then(data => {
+          throw new Error(data.error || `Ошибка сервера ${response.status}: ${response.statusText}`);
+        });
+      }
+      return response.json();
+    });
+  }
+  
+  // Функция для удаления модели прогнозирования по ID временного ряда
+  function deleteForcastingModel(timeSeriesId) {
+    if (!confirm('Вы уверены, что хотите удалить модель прогнозирования? Это действие нельзя отменить.')) {
+      return;
+    }
+    
+    // Отправляем запрос на удаление модели
+    fetch('/api/forecasting/delete/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCookie('csrftoken')
+      },
+      body: JSON.stringify({
+        time_series_id: timeSeriesId  // Используем time_series_id для поиска модели
+      })
+    })
+    .then(response => {
+      if (!response.ok) {
+        return response.json().then(data => {
+          throw new Error(data.error || `Ошибка сервера ${response.status}: ${response.statusText}`);
+        });
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (data.status === 'success') {
+        alert('Модель прогнозирования успешно удалена');
+        // Перезагружаем страницу для обновления отображения
+        window.location.reload();
+      } else {
+        throw new Error(data.error || 'Неизвестная ошибка при удалении модели');
+      }
+    })
+    .catch(error => {
+      console.error('Ошибка:', error);
+      alert('Не удалось удалить модель прогнозирования: ' + error.message);
+    });
+  }
+  
+  // Функция для получения CSRF-токена из cookies
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+  
+  // Функция для прогнозирования дочернего ряда
+  function forecastChildSeries(parentModelId, childSeriesId) {
+    // Показываем модальное окно с загрузкой
+    const forecastResultModal = new bootstrap.Modal(document.getElementById('forecastResultModal'));
+    forecastResultModal.show();
+    
+    // Отображаем статус загрузки, скрываем другие статусы
+    document.getElementById('forecastLoading').style.display = 'block';
+    document.getElementById('forecastSuccess').style.display = 'none';
+    document.getElementById('forecastError').style.display = 'none';
+    
+    // Подготавливаем данные для запроса
+    const requestData = {
+      parent_model_id: parentModelId,
+      child_series_id: childSeriesId,
+      forecast_periods: 30 // По умолчанию прогнозируем на 30 периодов вперед
+    };
+    
+    // Отправляем запрос на прогнозирование
+    fetch('/api/forecasting/forecast-child/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken()
+      },
+      body: JSON.stringify(requestData)
+    })
+    .then(response => response.json())
+    .then(data => {
+      // Скрываем загрузку
+      document.getElementById('forecastLoading').style.display = 'none';
+      
+      if (data.success) {
+        // Показываем успешный результат
+        document.getElementById('forecastSuccess').style.display = 'block';
+        document.getElementById('forecastSuccessMessage').textContent = data.message;
+        
+        // Создаем ссылку на просмотр результатов
+        const viewResultsLink = document.getElementById('viewForecastResultsLink');
+        viewResultsLink.href = `/timestamps/?filter_field=time_series_id&filter_operator=exact&filter_value=${data.time_series_id}`;
+      } else {
+        // Показываем ошибку
+        document.getElementById('forecastError').style.display = 'block';
+        document.getElementById('forecastErrorMessage').textContent = data.error;
+      }
+    })
+    .catch(error => {
+      // Скрываем загрузку и показываем ошибку
+      document.getElementById('forecastLoading').style.display = 'none';
+      document.getElementById('forecastError').style.display = 'block';
+      document.getElementById('forecastErrorMessage').textContent = `Ошибка при выполнении запроса: ${error.message}`;
+    });
+  }
+  
+  // Функция для получения CSRF-токена из cookies
+  function getCsrfToken() {
+    const name = 'csrftoken';
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
   }
 </script>
 {% endblock %}

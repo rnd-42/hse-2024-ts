@@ -1,58 +1,6 @@
 {% extends "data_view.html" %}
 {% load custom_filters %}
 
-{% block additional_content %}
-<div class="card mb-4">
-    <div class="card-body">
-        <h5 class="card-title">Выберите временной ряд</h5>
-        <p class="card-text">Выберите временной ряд, для которого нужно собрать все таймстемпы в иерархии (включая родительские ряды).</p>
-        <form method="get" class="row g-3">
-            <div class="col-md-8">
-                <select name="series_id" class="form-select" onchange="this.form.submit()">
-                    <option value="">Выберите временной ряд...</option>
-                    {% for series in available_series %}
-                        <option value="{{ series.time_series_id }}" 
-                                {% if selected_series and selected_series.time_series_id == series.time_series_id %}selected{% endif %}>
-                            {{ series.name }} (ID: {{ series.time_series_id }})
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-4">
-                <button type="submit" class="btn btn-primary">Собрать таймстемпы</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-{% if selected_series %}
-<div class="card mb-4">
-    <div class="card-header">
-        <h5 class="mb-0">Информация о выбранном ряде</h5>
-    </div>
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-6">
-                <p><strong>ID:</strong> {{ selected_series.time_series_id }}</p>
-                <p><strong>Название:</strong> {{ selected_series.name }}</p>
-            </div>
-            <div class="col-md-6">
-                <p><strong>Продукт:</strong> {{ selected_series.product.name }}</p>
-                <p><strong>Родительский ряд:</strong> 
-                    {% if selected_series.parent_time_series %}
-                        {{ selected_series.parent_time_series.name }} (ID: {{ selected_series.parent_time_series.time_series_id }})
-                    {% else %}
-                        Отсутствует
-                    {% endif %}
-                </p>
-            </div>
-        </div>
-        <p class="card-text">Отображаются все таймстемпы, собранные из иерархии рядов (включая родительские ряды).</p>
-    </div>
-</div>
-{% endif %}
-{% endblock %}
-
 {% block table_header %}
 <th>Глубина</th>
 <th>ID исходного ряда</th>
