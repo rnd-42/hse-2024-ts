@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Загрузка данных</h1>
+{% if message %}
+    <p><strong>{{ message }}</strong></p>
+{% endif %}
+
+<h2>Продукты (Product)</h2>
+<h3>CSV загрузка</h3>
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="hidden" name="form_type" value="product_csv">
+    <input type="file" name="file" required>
+    <button type="submit">Загрузить CSV</button>
+</form>
+<h3>Добавить вручную</h3>
+<form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="form_type" value="product_manual">
+    {{ product_form.as_p }}
+    <button type="submit">Добавить продукт</button>
+</form>
+
+<hr>
+
+<h2>Атрибуты (Attribute)</h2>
+<h3>CSV загрузка</h3>
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="hidden" name="form_type" value="attribute_csv">
+    <input type="file" name="file" required>
+    <button type="submit">Загрузить CSV</button>
+</form>
+<h3>Добавить вручную</h3>
+<form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="form_type" value="attribute_manual">
+    {{ attribute_form.as_p }}
+    <button type="submit">Добавить атрибут</button>
+</form>
+
+<hr>
+
+<h2>Временные ряды (Time Series)</h2>
+<h3>CSV загрузка</h3>
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="hidden" name="form_type" value="timeseries_csv">
+    <input type="file" name="file" required>
+    <button type="submit">Загрузить CSV</button>
+</form>
+<h3>Добавить вручную</h3>
+<form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="form_type" value="timeseries_manual">
+    {{ time_series_form.as_p }}
+    <button type="submit">Добавить временной ряд</button>
+</form>
+
+<hr>
+
+<h2>Таймстемпы (Timestamp)</h2>
+<h3>CSV загрузка</h3>
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="hidden" name="form_type" value="timestamp_csv">
+    <input type="file" name="file" required>
+    <button type="submit">Загрузить CSV</button>
+</form>
+<h3>Добавить вручную</h3>
+<form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="form_type" value="timestamp_manual">
+    {{ timestamp_form.as_p }}
+    <button type="submit">Добавить таймстемп</button>
+</form>
+{% endblock %}
