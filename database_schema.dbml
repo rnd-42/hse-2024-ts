@@ -1,0 +1,36 @@
+Table products {
+  product_id serial [primary key]
+  name varchar
+  category varchar
+  parameters jsonb
+}
+
+Table timestamps {
+  timestamp_id serial [primary key]
+  time_series_id integer [not null]
+  attribute_id integer [not null]
+  value text
+  start_dt timestamp [not null]
+  end_dt timestamp 
+}
+
+Table attributes {
+  attribute_id serial [primary key]
+  name text 
+  data_type text [not null]
+}
+
+Table time_series {
+  time_series_id serial [primary key]
+  parent_time_series_id integer
+  name text
+  product_id integer [not null]
+}
+
+Ref: products.product_id < time_series.product_id
+
+Ref: time_series.time_series_id < timestamps.time_series_id
+
+Ref: attributes.attribute_id < timestamps.attribute_id
+
+Ref: time_series.time_series_id < time_series.parent_time_series_id
